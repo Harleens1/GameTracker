@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { Search, Calendar, Star, Gamepad2 } from 'lucide-react';
+import { Search, Calendar, Star, Gamepad2, X, ExternalLink, Users, Trophy, Clock } from 'lucide-react';
 
 const GameSearch = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [gameDetails, setGameDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const searchGames = async (query) => {
     if (!query.trim()) {
@@ -19,7 +23,7 @@ const GameSearch = () => {
     try {
       // RAWG API endpoint - you'll need to get a free API key from https://rawg.io/apidocs
       const response = await fetch(
-        `https://api.rawg.io/api/games?key=API_KEY_HERE&search=${encodeURIComponent(query)}&page_size=10`
+        `https://api.rawg.io/api/games?key=30e7a2720a29469abca2ab7964bdf523&search=${encodeURIComponent(query)}&page_size=10`
       );
 
       if (!response.ok) {
@@ -45,16 +49,77 @@ const GameSearch = () => {
     const value = e.target.value;
     setSearchTerm(value);
     
-    // Optional: Add debounced search as user types
+    // Clear any existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Clear games if search term is empty
+    if (value.trim() === '') {
+      setGames([]);
+      return;
+    }
+    
+    // Add debounced search as user types
     if (value.length > 2) {
       const timeoutId = setTimeout(() => searchGames(value), 500);
-      return () => clearTimeout(timeoutId);
+      setSearchTimeout(timeoutId);
     }
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'TBA';
     return new Date(dateString).getFullYear();
+  };
+
+  const fetchGameDetails = async (gameId) => {
+    setDetailsLoading(true);
+    try {
+      const response = await fetch(
+        `https://api.rawg.io/api/games/${gameId}?key=30e7a2720a29469abca2ab7964bdf523`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch game details');
+      }
+      
+      const data = await response.json();
+      setGameDetails(data);
+    } catch (err) {
+      console.error('Error fetching game details:', err);
+      setGameDetails(null);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleGameClick = (game) => {
+    setSelectedGame(game);
+    fetchGameDetails(game.id);
+  };
+
+  const closeModal = () => {
+    setSelectedGame(null);
+    setGameDetails(null);
+  };
+
+  const formatPlaytime = (hours) => {
+    if (!hours) return 'Unknown';
+    return `${hours} hours`;
+  };
+
+  const formatMetacriticScore = (score) => {
+    if (!score) return null;
+    let colorClass = 'bg-gray-600';
+    if (score >= 75) colorClass = 'bg-green-600';
+    else if (score >= 50) colorClass = 'bg-yellow-600';
+    else if (score < 50) colorClass = 'bg-red-600';
+    
+    return (
+      <span className={`px-2 py-1 rounded text-white text-sm font-bold ${colorClass}`}>
+        {score}
+      </span>
+    );
   };
 
   return (
@@ -113,7 +178,11 @@ const GameSearch = () => {
         {games.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {games.map((game) => (
-              <div key={game.id} className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors">
+              <div 
+                key={game.id} 
+                className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors cursor-pointer transform hover:scale-105 duration-200"
+                onClick={() => handleGameClick(game)}
+              >
                 {/* Game Image */}
                 <div className="aspect-video bg-gray-700 relative">
                   {game.background_image ? (
@@ -189,6 +258,165 @@ const GameSearch = () => {
           <div className="text-center py-8">
             <Gamepad2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400">No games found for "{searchTerm}"</p>
+          </div>
+        )}
+
+        {/* Game Details Modal */}
+        {selectedGame && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-700">
+                <h2 className="text-2xl font-bold">{selectedGame.name}</h2>
+                <button
+                  onClick={closeModal}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6">
+                {detailsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full mx-auto"></div>
+                    <p className="mt-2 text-gray-400">Loading game details...</p>
+                  </div>
+                ) : gameDetails ? (
+                  <div className="space-y-6">
+                    {/* Game Image and Basic Info */}
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      <div className="lg:w-1/2">
+                        {gameDetails.background_image ? (
+                          <img
+                            src={gameDetails.background_image}
+                            alt={gameDetails.name}
+                            className="w-full rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-full h-64 bg-gray-700 rounded-lg flex items-center justify-center">
+                            <Gamepad2 className="w-16 h-16 text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="lg:w-1/2 space-y-4">
+                        {/* Release Date and Rating */}
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            <span>{gameDetails.released || 'TBA'}</span>
+                          </div>
+                          {gameDetails.rating && (
+                            <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              <span>{gameDetails.rating.toFixed(1)}/5</span>
+                            </div>
+                          )}
+                          {gameDetails.playtime && (
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{formatPlaytime(gameDetails.playtime)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Metacritic Score */}
+                        {gameDetails.metacritic && (
+                          <div className="flex items-center gap-2">
+                            <Trophy className="w-4 h-4" />
+                            <span className="text-sm">Metacritic:</span>
+                            {formatMetacriticScore(gameDetails.metacritic)}
+                          </div>
+                        )}
+
+                        {/* Platforms */}
+                        {gameDetails.platforms && gameDetails.platforms.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold mb-2">Platforms:</h4>
+                            <div className="flex flex-wrap gap-1">
+                              {gameDetails.platforms.map((platform) => (
+                                <span
+                                  key={platform.platform.id}
+                                  className="px-2 py-1 bg-gray-700 rounded text-xs"
+                                >
+                                  {platform.platform.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Genres */}
+                        {gameDetails.genres && gameDetails.genres.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold mb-2">Genres:</h4>
+                            <div className="flex flex-wrap gap-1">
+                              {gameDetails.genres.map((genre) => (
+                                <span
+                                  key={genre.id}
+                                  className="px-2 py-1 bg-blue-900 text-blue-200 rounded text-xs"
+                                >
+                                  {genre.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Developer and Publisher */}
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          {gameDetails.developers && gameDetails.developers.length > 0 && (
+                            <div>
+                              <h4 className="font-semibold mb-1">Developer:</h4>
+                              <p className="text-gray-400">{gameDetails.developers[0].name}</p>
+                            </div>
+                          )}
+                          {gameDetails.publishers && gameDetails.publishers.length > 0 && (
+                            <div>
+                              <h4 className="font-semibold mb-1">Publisher:</h4>
+                              <p className="text-gray-400">{gameDetails.publishers[0].name}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {gameDetails.description_raw && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">About</h3>
+                        <p className="text-gray-300 leading-relaxed">
+                          {gameDetails.description_raw.length > 500 
+                            ? gameDetails.description_raw.substring(0, 500) + '...' 
+                            : gameDetails.description_raw}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Website Link */}
+                    {gameDetails.website && (
+                      <div className="flex justify-center">
+                        <a
+                          href={gameDetails.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Visit Official Website
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">Failed to load game details</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
