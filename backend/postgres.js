@@ -1,1 +1,1 @@
-console.log("Use PostgreSQL")
+console.log("Use PostgreSQL NOW")
